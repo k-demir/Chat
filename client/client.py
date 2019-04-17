@@ -14,12 +14,14 @@ to_user = friends[0]
 chats = {x: [] for x in friends}
 
 
-# ------------------ GUI ------------------
+# ------------------ Login Window ------------------
 
 class LoginWindow(Frame):
 
-    def __init__(self, parent, wd, ht):
+    def __init__(self, parent, wd, ht, controller):
         Frame.__init__(self, parent, width=wd, height=ht)
+        self.controller = controller
+
         self.columnconfigure(0, weight=1)
         self.rowconfigure(0, weight=1)
         self.grid_propagate(False)
@@ -33,24 +35,94 @@ class LoginWindow(Frame):
 
         self.username_entry = Entry(login_container, width=30, highlightthickness=0, borderwidth=1)
         self.username_entry.grid(column=0, row=1, sticky=EW)
-        self.username_entry.bind("<Return>", lambda _: self.login())
+        self.username_entry.bind("<Return>", lambda _: self.try_login())
 
         password_label = Label(login_container, text="Password", justify=LEFT)
         password_label.grid(column=0, row=2, sticky=EW)
 
         self.password_entry = Entry(login_container, width=30, highlightthickness=0, borderwidth=1, show="*")
         self.password_entry.grid(column=0, row=3, sticky=EW)
-        self.password_entry.bind("<Return>", lambda _: self.login())
+        self.password_entry.bind("<Return>", lambda _: self.try_login())
 
-        self.login_button = Button(login_container, text="Login", command=self.login)
+        self.login_button = Button(login_container, text="Login", command=self.try_login)
         self.login_button.grid(column=0, row=4, sticky=EW, pady=(20, 0))
 
-        self.grid(row=0, column=0, sticky=NSEW)
+        self.login_button = Button(login_container, text="Register",
+                                   command=lambda: self.controller.raise_register_window())
+        self.login_button.grid(column=0, row=5, sticky=EW, pady=(20, 0))
 
-    def login(self):
+        self.grid(row=0, column=0)
+
+    def try_login(self):
+        asyncio.get_event_loop().run_until_complete(self.verify_login(self.username_entry.get(),
+                                                                      self.password_entry.get()))
+
+    async def verify_login(self, username, password):
+        async with websockets.connect("ws://localhost:8765") as websocket:
+            await websocket.send("l;;" + username + ";" + password)
+            response = await websocket.recv()
+            if response == "1":
+                self.complete_login(username)
+
+    def complete_login(self, name):
         global username
-        username = self.username_entry.get()
-        self.destroy()
+        username = name
+        self.controller.raise_chat_window()
+
+
+# ------------------ Registration Window ------------------
+
+
+class RegisterWindow(Frame):
+    def __init__(self, parent, wd, ht, controller):
+        Frame.__init__(self, parent, width=wd, height=ht)
+        self.controller = controller
+
+        register_container = Frame(self, width=wd / 3, height=ht / 2)
+        register_container.grid(column=0, row=0)
+        register_container.rowconfigure(0, weight=0)
+
+        username_label = Label(register_container, text="Select username", justify=LEFT)
+        username_label.grid(column=0, row=0, sticky=EW)
+
+        self.username_entry = Entry(register_container, width=30, highlightthickness=0, borderwidth=1)
+        self.username_entry.grid(column=0, row=1, sticky=EW)
+        self.username_entry.bind("<Return>", lambda _: self.try_registration())
+
+        password_label_1 = Label(register_container, text="Password", justify=LEFT)
+        password_label_1.grid(column=0, row=2, sticky=EW)
+
+        self.password_entry_1 = Entry(register_container, width=30, highlightthickness=0, borderwidth=1, show="*")
+        self.password_entry_1.grid(column=0, row=3, sticky=EW)
+        self.password_entry_1.bind("<Return>", lambda _: self.try_registration())
+
+        password_label_2 = Label(register_container, text="Confirm password", justify=LEFT)
+        password_label_2.grid(column=0, row=4, sticky=EW)
+
+        self.password_entry_2 = Entry(register_container, width=30, highlightthickness=0, borderwidth=1, show="*")
+        self.password_entry_2.grid(column=0, row=5, sticky=EW)
+        self.password_entry_2.bind("<Return>", lambda _: self.try_registration())
+
+        self.register_button = Button(register_container, text="Register", command=self.try_registration)
+        self.register_button.grid(column=0, row=6, sticky=EW, pady=(20, 0))
+
+        self.grid(row=0, column=0)
+
+    def try_registration(self):
+        if self.password_entry_1.get() != self.password_entry_2.get():
+            return
+        asyncio.get_event_loop().run_until_complete(self.send_registration(self.username_entry.get(),
+                                                                           self.password_entry_1.get()))
+
+    async def send_registration(self, username, password):
+        async with websockets.connect("ws://localhost:8765") as websocket:
+            await websocket.send("r;;" + username + ";" + password)
+            response = await websocket.recv()
+            if response == "1":
+                self.controller.raise_login_window()
+
+
+# ------------------ Chat Window ------------------
 
 
 class ChatWindow(Frame):
@@ -138,7 +210,7 @@ class ChatWindow(Frame):
     @staticmethod
     async def msg(message):
         async with websockets.connect("ws://localhost:8765") as websocket:
-            await websocket.send(to_user + ";" + username + ";" + message)
+            await websocket.send("m;" + to_user + ";" + username + ";" + message)
 
     def change_chat_partner(self, friend, btn):
         global to_user
@@ -147,6 +219,9 @@ class ChatWindow(Frame):
         for b in self.friend_btns:
             b.config(state=NORMAL)
         btn.config(state=DISABLED)
+
+
+# ------------------ Connection Thread ------------------
 
 
 class ConnectionThread(threading.Thread):
@@ -161,7 +236,7 @@ class ConnectionThread(threading.Thread):
 
     async def connect(self):
         async with websockets.connect("ws://localhost:8765") as websocket:
-            await websocket.send(";" + username + ";")
+            await websocket.send("c;;" + username + ";")
             while True:
                 message = await websocket.recv()
                 sender, parsed_message = message.split(";")
@@ -170,7 +245,10 @@ class ConnectionThread(threading.Thread):
                 self.chat_window.update_chat()
 
 
-class GUI:
+# ------------------ Controller ------------------
+
+
+class Controller:
     def __init__(self):
         width = 800
         height = 600
@@ -180,15 +258,24 @@ class GUI:
         app.title("Chat")
         app.geometry("%dx%d" % (width, height))
 
-        login_window = LoginWindow(app, width, height)
-        chat_window = ChatWindow(app, width, height)
+        self.chat_window = ChatWindow(app, width, height)
+        self.register_window = RegisterWindow(app, width, height, self)
+        self.login_window = LoginWindow(app, width, height, self)
 
-        login_window.tkraise()
+        self.raise_login_window()
 
-        ct = ConnectionThread(chat_window)
+        ct = ConnectionThread(self.chat_window)
         ct.start()
         app.mainloop()
 
+    def raise_register_window(self):
+        self.register_window.tkraise()
+
+    def raise_login_window(self):
+        self.login_window.tkraise()
+
+    def raise_chat_window(self):
+        self.chat_window.tkraise()
 
 if __name__ == "__main__":
-    GUI()
+    Controller()

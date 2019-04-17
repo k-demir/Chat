@@ -15,27 +15,35 @@ class Connection:
 
     async def msg(self, websocket, path):
         async for received_message in websocket:
-            receiver, sender, message = self.parse_message(received_message)
+            msg_type, receiver, sender, message = self.parse_message(received_message)
 
-            sender_id = self.db.find_user(sender)
-
-            if not sender_id:
-                sender_id = self.db.add_user(sender, "password")
-
-            if str(sender_id) not in self.connections:
-                self.connections[str(sender_id)] = websocket
-                continue
-
-            receiver_id = self.db.find_user(receiver)
-
-            await self.connections[str(sender_id)].send(sender + ";" + message)
-            if str(receiver_id) in self.connections and receiver != sender:
-                await self.connections[str(receiver_id)].send(sender + ";" + message)
+            # Login
+            if msg_type == "l":
+                if self.db.verify_user(sender, message):
+                    await websocket.send("1")
+                else:
+                    await websocket.send("0")
+            # Registration
+            elif msg_type == "r":
+                if not self.db.find_user(sender):
+                    self.db.add_user(sender, message)
+                    await websocket.send("1")
+                else:
+                    await websocket.send("0")
+            # Connection
+            elif msg_type == "c":
+                if sender not in self.connections:
+                    self.connections[sender] = websocket
+            # Receive a message
+            elif msg_type == "m":
+                await self.connections[sender].send(sender + ";" + message)
+                if sender in self.connections and receiver != sender:
+                    await self.connections[receiver].send(sender + ";" + message)
 
     @staticmethod
     def parse_message(message):
-        split_message = message.split(";", 2)
-        return split_message[0], split_message[1], split_message[2]
+        split_message = message.split(";", 3)
+        return split_message[0], split_message[1], split_message[2], split_message[3]
 
 
 class Database:
@@ -56,6 +64,13 @@ class Database:
         if not ret:
             return None
         return ret[0]
+
+    def verify_user(self, username, password):
+        c = self.user_db.cursor()
+        c.execute("SELECT rowid FROM user_info WHERE username=? AND password=?", (username, password))
+        if c.fetchone():
+            return True
+        return False
 
 
 if __name__ == "__main__":
