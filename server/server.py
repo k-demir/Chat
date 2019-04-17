@@ -3,6 +3,7 @@ import websockets
 import ssl
 import pathlib
 import sqlite3
+import pickle
 
 
 class Connection:
@@ -34,11 +35,19 @@ class Connection:
             elif msg_type == "c":
                 if sender not in self.connections:
                     self.connections[sender] = websocket
+                await websocket.send(pickle.dumps(self.db.find_friends(sender)))
             # Receive a message
             elif msg_type == "m":
                 await self.connections[sender].send(sender + ";" + message)
                 if sender in self.connections and receiver != sender:
                     await self.connections[receiver].send(sender + ";" + message)
+            # Add friend
+            elif msg_type == "a":
+                if self.db.find_user(message) and not self.db.are_friends(sender, message):
+                    self.db.add_friends(sender, message)
+                    await websocket.send("1")
+                else:
+                    await websocket.send("0")
 
     @staticmethod
     def parse_message(message):
@@ -49,7 +58,8 @@ class Connection:
 class Database:
     def __init__(self):
         self.user_db = sqlite3.connect("user_info.db")
-        self.user_db.execute("CREATE TABLE IF NOT EXISTS user_info (username TEXT, password TEXT)")
+        self.user_db.execute("CREATE TABLE IF NOT EXISTS user_info (username TEXT PRIMARY KEY, password TEXT)")
+        self.user_db.execute("CREATE TABLE IF NOT EXISTS friends (user1 TEXT, user2 TEXT, PRIMARY KEY (user1, user2))")
 
     def add_user(self, username, password):
         c = self.user_db.cursor()
@@ -71,6 +81,33 @@ class Database:
         if c.fetchone():
             return True
         return False
+
+    def add_friends(self, user_1, user_2):
+        c = self.user_db.cursor()
+        if not self.are_friends(user_1, user_2):
+            c.execute("INSERT INTO friends VALUES (?, ?)", (user_1, user_2))
+            self.user_db.commit()
+
+    def are_friends(self, user_1, user_2):
+        c = self.user_db.cursor()
+        c.execute("SELECT rowid FROM friends WHERE (user1=? AND user2=?) OR (user1=? AND user2=?)",
+                  (user_1, user_2, user_2, user_1))
+        if c.fetchone():
+            return True
+        return False
+
+    def find_friends(self, user):
+        friends = []
+        c = self.user_db.cursor()
+        c.execute("SELECT user1 FROM friends WHERE user2=?", (user,))
+        res = c.fetchall()
+        if res:
+            friends += [friend[0] for friend in res]
+        c.execute("SELECT user2 FROM friends WHERE user1=?", (user,))
+        res = c.fetchall()
+        if res:
+            friends += [friend[0] for friend in res]
+        return friends
 
 
 if __name__ == "__main__":

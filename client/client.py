@@ -6,12 +6,13 @@ from tkinter import *
 from tkinter import scrolledtext
 import threading
 import time
+import pickle
 
 
 username = ""
-friends = ["a", "b", "c", "d"]
-to_user = friends[0]
-chats = {x: [] for x in friends}
+friends = []
+to_user = ""
+chats = {}
 
 
 # ------------------ Login Window ------------------
@@ -167,29 +168,45 @@ class ChatWindow(Frame):
         sidebar.grid_propagate(False)
 
         # Sidebar friends area
-        friends_frame = Frame(sidebar, height=200)
-        friends_frame.grid(column=0, row=0, sticky=N+EW)
-        friends_frame.columnconfigure(0, weight=1)
-        friends_frame.rowconfigure(0, weight=0)
-        friends_frame.grid_propagate(True)
+        self.friends_frame = Frame(sidebar, height=200)
+        self.friends_frame.grid(column=0, row=0, sticky=N+EW)
+        self.friends_frame.columnconfigure(0, weight=1)
+        self.friends_frame.rowconfigure(0, weight=0)
+        self.friends_frame.grid_propagate(True)
 
         # Sidebar border
         sidebar_border = Frame(sidebar, width=1, height=ht)
-        sidebar_border.grid(column=1, row=0)
+        sidebar_border.grid(column=1, row=0, rowspan=2)
         sidebar_border.config(bg="#bebac6")
 
-        # Sidebar buttons
-        self.friend_btns = []
-        for friend in friends:
-            b = Button(friends_frame, text=friend)
-            b.config(command=lambda f=friend, b=b: self.change_chat_partner(f, b))
-            self.friend_btns.append(b)
-        for idx, btn in enumerate(self.friend_btns):
-            btn.grid(column=0, row=idx, sticky=EW)
-            if idx == 0:
-                btn.config(state=DISABLED)
+        # Add friends area
+        add_friends_frame = Frame(sidebar, height=100)
+        add_friends_frame.grid(column=0, row=1, sticky=N + EW)
+        add_friends_frame.columnconfigure(0, weight=1)
+        add_friends_frame.rowconfigure(0, weight=0)
+        add_friends_frame.grid_propagate(True)
+
+        # Add friends label
+        add_friends_label = Label(add_friends_frame, text="Add friends")
+        add_friends_label.grid(column=0, row=0, sticky=EW)
+
+        # Add friends entry
+        self.add_friends_entry = Entry(add_friends_frame, highlightthickness=0, borderwidth=1)
+        self.add_friends_entry.grid(column=0, row=1, sticky=EW)
+        self.add_friends_entry.bind("<Return>", lambda _: self.try_add_friend())
+
+        self.add_sidebar_buttons()
 
         self.grid(row=0, column=0, sticky=NSEW)
+
+    def add_sidebar_buttons(self):
+        friend_btns = []
+        for friend in friends:
+            b = Button(self.friends_frame, text=friend)
+            b.config(command=lambda f=friend: self.change_chat_partner(f))
+            friend_btns.append(b)
+        for idx, btn in enumerate(friend_btns):
+            btn.grid(column=0, row=idx, sticky=EW)
 
     def send_message(self):
         message = self.message_entry.get()
@@ -212,14 +229,25 @@ class ChatWindow(Frame):
         async with websockets.connect("ws://localhost:8765") as websocket:
             await websocket.send("m;" + to_user + ";" + username + ";" + message)
 
-    def change_chat_partner(self, friend, btn):
+    def change_chat_partner(self, friend):
         global to_user
         to_user = friend
         self.update_chat()
-        for b in self.friend_btns:
-            b.config(state=NORMAL)
-        btn.config(state=DISABLED)
 
+    def try_add_friend(self):
+        asyncio.get_event_loop().run_until_complete(self.add_friend(self.add_friends_entry.get()))
+
+    async def add_friend(self, user):
+        async with websockets.connect("ws://localhost:8765") as websocket:
+            await websocket.send("a;;" + username + ";" + user)
+            response = await websocket.recv()
+            if response == "1":
+                global friends
+                global chats
+                friends.append(user)
+                chats[user] = []
+                self.add_sidebar_buttons()
+            self.add_friends_entry.delete(0, END)
 
 # ------------------ Connection Thread ------------------
 
@@ -237,10 +265,21 @@ class ConnectionThread(threading.Thread):
     async def connect(self):
         async with websockets.connect("ws://localhost:8765") as websocket:
             await websocket.send("c;;" + username + ";")
+            res = await websocket.recv()
+
+            global friends
+            global chats
+            global to_user
+
+            friends = pickle.loads(res)
+            self.chat_window.add_sidebar_buttons()
+            to_user = friends[0]
+            for friend in friends:
+                chats[friend] = []
+
             while True:
                 message = await websocket.recv()
                 sender, parsed_message = message.split(";")
-                global chats
                 chats[to_user].append(sender + ": " + parsed_message)
                 self.chat_window.update_chat()
 
