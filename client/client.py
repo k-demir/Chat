@@ -9,9 +9,10 @@ import time
 
 
 username = ""
-to_user = ""
 friends = ["a", "b", "c", "d"]
-chats = {x:[] for x in friends}
+to_user = friends[0]
+chats = {x: [] for x in friends}
+
 
 # ------------------ GUI ------------------
 
@@ -23,12 +24,26 @@ class LoginWindow(Frame):
         self.rowconfigure(0, weight=1)
         self.grid_propagate(False)
 
-        self.username_entry = Entry(self, highlightthickness=0, borderwidth=1)
-        self.username_entry.grid(column=0, row=0, sticky=EW)
+        login_container = Frame(self, width=wd/3, height=ht/2)
+        login_container.grid(column=0, row=0)
+        login_container.rowconfigure(0, weight=0)
+
+        username_label = Label(login_container, text="Username", justify=LEFT)
+        username_label.grid(column=0, row=0, sticky=EW)
+
+        self.username_entry = Entry(login_container, width=30, highlightthickness=0, borderwidth=1)
+        self.username_entry.grid(column=0, row=1, sticky=EW)
         self.username_entry.bind("<Return>", lambda _: self.login())
 
-        self.login_button = Button(self, text="Login", command=self.login)
-        self.login_button.grid(column=0, row=1, sticky=EW)
+        password_label = Label(login_container, text="Password", justify=LEFT)
+        password_label.grid(column=0, row=2, sticky=EW)
+
+        self.password_entry = Entry(login_container, width=30, highlightthickness=0, borderwidth=1, show="*")
+        self.password_entry.grid(column=0, row=3, sticky=EW)
+        self.password_entry.bind("<Return>", lambda _: self.login())
+
+        self.login_button = Button(login_container, text="Login", command=self.login)
+        self.login_button.grid(column=0, row=4, sticky=EW, pady=(20, 0))
 
         self.grid(row=0, column=0, sticky=NSEW)
 
@@ -52,7 +67,7 @@ class ChatWindow(Frame):
 
         # Message frame
         message_frame = Frame(self, width=4*wd/5, height=50)
-        message_frame.grid(column=1, row=1)
+        message_frame.grid(column=1, row=1, padx=(15, 25))
         message_frame.columnconfigure(0, weight=1)
         message_frame.grid_propagate(False)
 
@@ -70,7 +85,7 @@ class ChatWindow(Frame):
         send_button = Button(message_frame, text="Send",
                              command=lambda: self.send_message(),
                              width=10)
-        send_button.grid(column=1, row=0, sticky=NSEW)
+        send_button.grid(column=1, row=0, sticky=NSEW, padx=(0, 20))
 
         # Sidebar frame
         sidebar = Frame(self, width=wd/5, height=ht)
@@ -79,12 +94,28 @@ class ChatWindow(Frame):
         sidebar.rowconfigure(0, weight=1)
         sidebar.grid_propagate(False)
 
+        # Sidebar friends area
+        friends_frame = Frame(sidebar, height=200)
+        friends_frame.grid(column=0, row=0, sticky=N+EW)
+        friends_frame.columnconfigure(0, weight=1)
+        friends_frame.rowconfigure(0, weight=0)
+        friends_frame.grid_propagate(True)
+
+        # Sidebar border
+        sidebar_border = Frame(sidebar, width=1, height=ht)
+        sidebar_border.grid(column=1, row=0)
+        sidebar_border.config(bg="#bebac6")
+
         # Sidebar buttons
-        friend_buttons = []
+        self.friend_btns = []
         for friend in friends:
-            friend_buttons.append(Button(sidebar, text=friend, command=lambda f=friend: self.change_chat_partner(f)))
-        for idx, btn in enumerate(friend_buttons):
+            b = Button(friends_frame, text=friend)
+            b.config(command=lambda f=friend, b=b: self.change_chat_partner(f, b))
+            self.friend_btns.append(b)
+        for idx, btn in enumerate(self.friend_btns):
             btn.grid(column=0, row=idx, sticky=EW)
+            if idx == 0:
+                btn.config(state=DISABLED)
 
         self.grid(row=0, column=0, sticky=NSEW)
 
@@ -104,14 +135,19 @@ class ChatWindow(Frame):
         self.received_messages.see(END)
         self.received_messages.config(state=DISABLED)
 
-    async def msg(self, message):
+    @staticmethod
+    async def msg(message):
         async with websockets.connect("ws://localhost:8765") as websocket:
             await websocket.send(to_user + ";" + username + ";" + message)
 
-    def change_chat_partner(self, friend):
+    def change_chat_partner(self, friend, btn):
         global to_user
         to_user = friend
         self.update_chat()
+        for b in self.friend_btns:
+            b.config(state=NORMAL)
+        btn.config(state=DISABLED)
+
 
 class ConnectionThread(threading.Thread):
     def __init__(self, chat_window):
