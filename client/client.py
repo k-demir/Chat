@@ -10,13 +10,13 @@ import pickle
 import random
 from cryptography.fernet import Fernet
 import base64
+import atexit
 
 
 username = ""
 friends = []
 to_user = ""
 chats = {}
-private_keys = {}
 keys = {}
 
 
@@ -251,13 +251,6 @@ class ChatWindow(Frame):
             response = await websocket.recv()
             if response == "1":
                 await Encryption.send_diffie_hellman(user)
-                global friends
-                global chats
-                global to_user
-                friends.append(user)
-                chats[user] = []
-                self.add_sidebar_buttons()
-                to_user = user
             self.add_friends_entry.delete(0, END)
 
 
@@ -287,26 +280,83 @@ class ConnectionThread(threading.Thread):
             self.chat_window.add_sidebar_buttons()
             if friends:
                 to_user = friends[0]
-            for friend in friends:
-                chats[friend] = []
+
+            FileManager.load()
+            a = AutoSaver()
+            a.start()
 
             while True:
                 message = await websocket.recv()
                 sender, parsed_message = message.split(";", 1)
 
                 if sender[:2] == "a+":
-                    friends.append(sender[2:])
-                    chats[sender[2:]] = []
-                    self.chat_window.add_sidebar_buttons()
-                    to_user = sender[2:]
                     await Encryption.send_diffie_hellman(sender[2:])
                     continue
                 elif sender[:2] == "d+":
                     await Encryption.receive_diffie_hellman(sender[2:], parsed_message)
+                    friends.append(sender[2:])
+                    chats[sender[2:]] = []
+                    self.chat_window.add_sidebar_buttons()
+                    to_user = sender[2:]
                     continue
 
                 chats[to_user].append(sender + ": " + Encryption.decrypt(parsed_message, to_user))
                 self.chat_window.update_chat()
+
+
+# ------------------ File manager ------------------
+
+
+class FileManager:
+
+    @staticmethod
+    def load():
+        try:
+            f = open(username + ".pickle", "rb")
+            f.close()
+        except IOError:
+            f = open(username + ".pickle", "wb+")
+            f.close()
+        with open(username + ".pickle", "rb") as file:
+            global keys
+            global chats
+            try:
+                loaded_keys, loaded_chats = pickle.load(file)
+                keys = loaded_keys
+                chats = loaded_chats
+            except EOFError:
+                keys = {}
+                chats = {}
+
+    @staticmethod
+    def save():
+        with open(username + ".pickle", "wb+") as file:
+            pickle.dump((keys, chats), file)
+
+
+# ------------------ Saver thread ------------------
+
+class AutoSaver(threading.Thread):
+    def __init__(self):
+        threading.Thread.__init__(self)
+
+    def run(self):
+        time.sleep(1800)
+        FileManager.save()
+
+
+# ------------------ Clean up ------------------
+
+class CleanUp:
+
+    @classmethod
+    def disconnect(cls):
+        asyncio.get_event_loop().run_until_complete(cls.send_disconnect_request())
+
+    @classmethod
+    async def send_disconnect_request(cls):
+        async with websockets.connect("ws://localhost:8765") as websocket:
+            await websocket.send("g;;" + username + ";")
 
 
 # ------------------ Encryption ------------------
@@ -328,26 +378,24 @@ class Encryption:
             "15728E5A8AACAA68FFFFFFFFFFFFFFFF", 16)
     # base
     g = 2
+    private_keys = {}
 
     @classmethod
     async def send_diffie_hellman(cls, friend):
-        async with websockets.connect("ws://localhost:8765") as websocket:
-            global private_keys
-            if friend not in private_keys:
+        async with websockets.connect("ws://localhost:8765") as ws:
+            if friend not in cls.private_keys:
                 await cls.add_private_key(friend)
-            await websocket.send("d;" + friend + ";" + username + ";" + str(pow(cls.g, private_keys[friend], cls.p)))
+            await ws.send("d;" + friend + ";" + username + ";" + str(pow(cls.g, cls.private_keys[friend], cls.p)))
 
     @classmethod
     async def receive_diffie_hellman(cls, friend, received_key):
-        global private_keys
-        if friend not in private_keys:
+        if friend not in cls.private_keys:
             await cls.add_private_key(friend)
-        keys[friend] = pow(int(received_key), private_keys[friend], cls.p)
+        keys[friend] = pow(int(received_key), cls.private_keys[friend], cls.p)
 
     @classmethod
     async def add_private_key(cls, friend):
-        global private_keys
-        private_keys[friend] = random.getrandbits(160)
+        cls.private_keys[friend] = random.getrandbits(160)
 
     @staticmethod
     def encrypt(message, friend):
@@ -398,4 +446,6 @@ class Controller:
 
 
 if __name__ == "__main__":
+    atexit.register(FileManager.save)
+    atexit.register(CleanUp().disconnect)
     Controller()

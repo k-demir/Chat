@@ -15,51 +15,59 @@ class Connection:
         asyncio.get_event_loop().run_forever()
 
     async def msg(self, websocket, path):
-        async for received_message in websocket:
-            msg_type, receiver, sender, message = self.parse_message(received_message)
+        try:
+            async for received_message in websocket:
+                msg_type, receiver, sender, message = self.parse_message(received_message)
 
-            # Login
-            if msg_type == "l":
-                if self.db.verify_user(sender, message):
-                    await websocket.send("1")
-                else:
-                    await websocket.send("0")
-            # Registration
-            elif msg_type == "r":
-                if not self.db.find_user(sender):
-                    self.db.add_user(sender, message)
-                    await websocket.send("1")
-                else:
-                    await websocket.send("0")
-            # Connection
-            elif msg_type == "c":
-                if sender not in self.connections:
-                    self.connections[sender] = websocket
-                await websocket.send(pickle.dumps(self.db.find_friends(sender)))
-            # Receive a message
-            elif msg_type == "m":
-                await self.connections[sender].send(sender + ";" + message)
-                if receiver in self.connections and receiver != sender:
-                    await self.connections[receiver].send(sender + ";" + message)
-            # Add friend
-            elif msg_type == "a":
-                if self.db.find_user(receiver) and not self.db.are_friends(sender, receiver):
-                    self.db.add_friends(sender, receiver)
+                # Login
+                if msg_type == "l":
+                    if self.db.verify_user(sender, message):
+                        await websocket.send("1")
+                    else:
+                        await websocket.send("0")
+                # Registration
+                elif msg_type == "r":
+                    if not self.db.find_user(sender):
+                        self.db.add_user(sender, message)
+                        await websocket.send("1")
+                    else:
+                        await websocket.send("0")
+                # Connection
+                elif msg_type == "c":
+                    if sender not in self.connections:
+                        self.connections[sender] = websocket
+                    await websocket.send(pickle.dumps(self.db.find_friends(sender)))
+                # Receive a message
+                elif msg_type == "m":
+                    await self.connections[sender].send(sender + ";" + message)
+                    if receiver in self.connections and receiver != sender:
+                        await self.connections[receiver].send(sender + ";" + message)
+                # Add friend
+                elif msg_type == "a":
+                    if self.db.find_user(receiver) and not self.db.are_friends(sender, receiver):
+                        self.db.add_friends(sender, receiver)
+                        if receiver in self.connections:
+                            await self.connections[receiver].send("a+" + sender + ";")
+                        await websocket.send("1")
+                    else:
+                        await websocket.send("0")
+                # Diffie-Hellman key exchange
+                elif msg_type == "d":
                     if receiver in self.connections:
-                        await self.connections[receiver].send("a+" + sender + ";")
-                    await websocket.send("1")
-                else:
-                    await websocket.send("0")
-            # Diffie-Hellman key exchange
-            elif msg_type == "d":
-                if receiver in self.connections:
-                    await self.connections[receiver].send("d+" + sender + ";" + message)
+                        await self.connections[receiver].send("d+" + sender + ";" + message)
+                # Disconnection request
+                elif msg_type == "g":
+                    self.remove_connection(sender)
+        except websockets.ConnectionClosed:
+            pass
 
     @staticmethod
     def parse_message(message):
         split_message = message.split(";", 3)
         return split_message[0], split_message[1], split_message[2], split_message[3]
 
+    def remove_connection(self, user):
+        self.connections.pop(user)
 
 class Database:
     def __init__(self):
