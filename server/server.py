@@ -39,15 +39,21 @@ class Connection:
             # Receive a message
             elif msg_type == "m":
                 await self.connections[sender].send(sender + ";" + message)
-                if sender in self.connections and receiver != sender:
+                if receiver in self.connections and receiver != sender:
                     await self.connections[receiver].send(sender + ";" + message)
             # Add friend
             elif msg_type == "a":
-                if self.db.find_user(message) and not self.db.are_friends(sender, message):
-                    self.db.add_friends(sender, message)
+                if self.db.find_user(receiver) and not self.db.are_friends(sender, receiver):
+                    self.db.add_friends(sender, receiver)
+                    if receiver in self.connections:
+                        await self.connections[receiver].send("a+" + sender + ";")
                     await websocket.send("1")
                 else:
                     await websocket.send("0")
+            # Diffie-Hellman key exchange
+            elif msg_type == "d":
+                if receiver in self.connections:
+                    await self.connections[receiver].send("d+" + sender + ";" + message)
 
     @staticmethod
     def parse_message(message):

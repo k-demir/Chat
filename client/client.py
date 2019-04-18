@@ -7,15 +7,21 @@ from tkinter import scrolledtext
 import threading
 import time
 import pickle
+import random
+from cryptography.fernet import Fernet
+import base64
 
 
 username = ""
 friends = []
 to_user = ""
 chats = {}
+private_keys = {}
+keys = {}
 
 
 # ------------------ Login Window ------------------
+
 
 class LoginWindow(Frame):
 
@@ -227,7 +233,7 @@ class ChatWindow(Frame):
     @staticmethod
     async def msg(message):
         async with websockets.connect("ws://localhost:8765") as websocket:
-            await websocket.send("m;" + to_user + ";" + username + ";" + message)
+            await websocket.send("m;" + to_user + ";" + username + ";" + Encryption.encrypt(message, to_user))
 
     def change_chat_partner(self, friend):
         global to_user
@@ -239,15 +245,21 @@ class ChatWindow(Frame):
 
     async def add_friend(self, user):
         async with websockets.connect("ws://localhost:8765") as websocket:
-            await websocket.send("a;;" + username + ";" + user)
+            if user == username:
+                return
+            await websocket.send("a;" + user + ";" + username + ";")
             response = await websocket.recv()
             if response == "1":
+                await Encryption.send_diffie_hellman(user)
                 global friends
                 global chats
+                global to_user
                 friends.append(user)
                 chats[user] = []
                 self.add_sidebar_buttons()
+                to_user = user
             self.add_friends_entry.delete(0, END)
+
 
 # ------------------ Connection Thread ------------------
 
@@ -273,15 +285,83 @@ class ConnectionThread(threading.Thread):
 
             friends = pickle.loads(res)
             self.chat_window.add_sidebar_buttons()
-            to_user = friends[0]
+            if friends:
+                to_user = friends[0]
             for friend in friends:
                 chats[friend] = []
 
             while True:
                 message = await websocket.recv()
-                sender, parsed_message = message.split(";")
-                chats[to_user].append(sender + ": " + parsed_message)
+                sender, parsed_message = message.split(";", 1)
+
+                if sender[:2] == "a+":
+                    friends.append(sender[2:])
+                    chats[sender[2:]] = []
+                    self.chat_window.add_sidebar_buttons()
+                    to_user = sender[2:]
+                    await Encryption.send_diffie_hellman(sender[2:])
+                    continue
+                elif sender[:2] == "d+":
+                    await Encryption.receive_diffie_hellman(sender[2:], parsed_message)
+                    continue
+
+                chats[to_user].append(sender + ": " + Encryption.decrypt(parsed_message, to_user))
                 self.chat_window.update_chat()
+
+
+# ------------------ Encryption ------------------
+
+
+class Encryption:
+
+    # 2048-bit prime
+    p = int("FFFFFFFFFFFFFFFFC90FDAA22168C234C4C6628B80DC1CD1"
+            "29024E088A67CC74020BBEA63B139B22514A08798E3404DD"
+            "EF9519B3CD3A431B302B0A6DF25F14374FE1356D6D51C245"
+            "E485B576625E7EC6F44C42E9A637ED6B0BFF5CB6F406B7ED"
+            "EE386BFB5A899FA5AE9F24117C4B1FE649286651ECE45B3D"
+            "C2007CB8A163BF0598DA48361C55D39A69163FA8FD24CF5F"
+            "83655D23DCA3AD961C62F356208552BB9ED529077096966D"
+            "670C354E4ABC9804F1746C08CA18217C32905E462E36CE3B"
+            "E39E772C180E86039B2783A2EC07A28FB5C55DF06F4C52C9"
+            "DE2BCBF6955817183995497CEA956AE515D2261898FA0510"
+            "15728E5A8AACAA68FFFFFFFFFFFFFFFF", 16)
+    # base
+    g = 2
+
+    @classmethod
+    async def send_diffie_hellman(cls, friend):
+        async with websockets.connect("ws://localhost:8765") as websocket:
+            global private_keys
+            if friend not in private_keys:
+                await cls.add_private_key(friend)
+            await websocket.send("d;" + friend + ";" + username + ";" + str(pow(cls.g, private_keys[friend], cls.p)))
+
+    @classmethod
+    async def receive_diffie_hellman(cls, friend, received_key):
+        global private_keys
+        if friend not in private_keys:
+            await cls.add_private_key(friend)
+        keys[friend] = pow(int(received_key), private_keys[friend], cls.p)
+
+    @classmethod
+    async def add_private_key(cls, friend):
+        global private_keys
+        private_keys[friend] = random.getrandbits(160)
+
+    @staticmethod
+    def encrypt(message, friend):
+        random.seed(keys[friend])
+        k = base64.urlsafe_b64encode(bytearray(random.getrandbits(8) for _ in range(32)))
+        f = Fernet(k)
+        return f.encrypt(bytes(message, encoding="UTF-8")).decode("UTF-8")
+
+    @staticmethod
+    def decrypt(message, friend):
+        random.seed(keys[friend])
+        k = base64.urlsafe_b64encode(bytearray(random.getrandbits(8) for _ in range(32)))
+        f = Fernet(k)
+        return f.decrypt(message.encode("UTF-8")).decode()
 
 
 # ------------------ Controller ------------------
@@ -315,6 +395,7 @@ class Controller:
 
     def raise_chat_window(self):
         self.chat_window.tkraise()
+
 
 if __name__ == "__main__":
     Controller()
