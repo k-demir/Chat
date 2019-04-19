@@ -361,7 +361,10 @@ class CleanUp:
     @classmethod
     async def send_disconnect_request(cls):
         async with websockets.connect("ws://localhost:8765") as websocket:
-            await websocket.send("g;;" + username + ";")
+            if username:
+                await websocket.send("g;;" + username + ";")
+            else:
+                await websocket.send("g;;" + connection_id + ";")
 
 
 # ------------------ Encryption ------------------

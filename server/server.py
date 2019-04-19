@@ -7,6 +7,8 @@ import base64
 from cryptography.fernet import Fernet
 from os import urandom
 import sys
+import hashlib
+import binascii
 
 
 keys = {}
@@ -52,8 +54,8 @@ class Connection:
                     await websocket.send(pickle.dumps(self.db.find_friends(sender)))
                 # Receive a message
                 elif msg_type == "m":
-                    await self.connections[sender].send(sender + ";" + message)
                     if receiver in self.connections and receiver != sender:
+                        await self.connections[sender].send(sender + ";" + message)
                         await self.connections[receiver].send(sender + ";" + message)
                 # Add friend
                 elif msg_type == "a":
@@ -89,12 +91,14 @@ class Connection:
 class Database:
     def __init__(self):
         self.user_db = sqlite3.connect("user_info.db")
-        self.user_db.execute("CREATE TABLE IF NOT EXISTS user_info (username TEXT PRIMARY KEY, password TEXT)")
+        self.user_db.execute("CREATE TABLE IF NOT EXISTS user_info (username TEXT PRIMARY KEY,password BLOB,salt BLOB)")
         self.user_db.execute("CREATE TABLE IF NOT EXISTS friends (user1 TEXT, user2 TEXT, PRIMARY KEY (user1, user2))")
 
     def add_user(self, username, password):
+        hashed_password, salt = Encryption.hash_password(password)
+
         c = self.user_db.cursor()
-        c.execute("INSERT INTO user_info VALUES (?, ?)", (username, password))
+        c.execute("INSERT INTO user_info VALUES (?, ?, ?)", (username, hashed_password, salt))
         self.user_db.commit()
         return self.find_user(username)
 
@@ -108,10 +112,15 @@ class Database:
 
     def verify_user(self, username, password):
         c = self.user_db.cursor()
-        c.execute("SELECT rowid FROM user_info WHERE username=? AND password=?", (username, password))
-        if c.fetchone():
-            return True
-        return False
+        c.execute("SELECT password, salt FROM user_info WHERE username=?", (username,))
+        try:
+            found_hashed_password, salt = c.fetchone()
+            hashed_password, _ = Encryption.hash_password(password, salt)
+            if found_hashed_password == hashed_password:
+                return True
+            return False
+        except TypeError:
+            return False
 
     def add_friends(self, user_1, user_2):
         c = self.user_db.cursor()
@@ -179,6 +188,13 @@ class Encryption:
         k = base64.urlsafe_b64encode(bytearray(random.getrandbits(8) for _ in range(32)))
         f = Fernet(k)
         return f.decrypt(message.encode("UTF-8")).decode()
+
+    @staticmethod
+    def hash_password(password, salt=None):
+        if not salt:
+            salt = urandom(16)
+        hashed_password = hashlib.pbkdf2_hmac("sha512", bytes(password, "utf-8"), salt, 100000)
+        return binascii.hexlify(hashed_password), salt
 
 
 if __name__ == "__main__":
