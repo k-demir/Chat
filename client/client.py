@@ -1,7 +1,5 @@
 import asyncio
 import websockets
-import ssl
-import pathlib
 from tkinter import *
 from tkinter import scrolledtext
 import threading
@@ -11,6 +9,8 @@ import random
 from cryptography.fernet import Fernet
 import base64
 import atexit
+from os import urandom
+import sys
 
 
 username = ""
@@ -18,6 +18,10 @@ friends = []
 to_user = ""
 chats = {}
 keys = {}
+
+connection_id = base64.urlsafe_b64encode(urandom(30)).decode()
+connection_secret_key = int.from_bytes(urandom(120), sys.byteorder)
+connection_key = None
 
 
 # ------------------ Login Window ------------------
@@ -66,7 +70,7 @@ class LoginWindow(Frame):
 
     async def verify_login(self, username, password):
         async with websockets.connect("ws://localhost:8765") as websocket:
-            await websocket.send("l;;" + username + ";" + password)
+            await websocket.send("l;;" + connection_id + ";" + Encryption.encrypt_to_server(username + "@" + password))
             response = await websocket.recv()
             if response == "1":
                 self.complete_login(username)
@@ -123,7 +127,7 @@ class RegisterWindow(Frame):
 
     async def send_registration(self, username, password):
         async with websockets.connect("ws://localhost:8765") as websocket:
-            await websocket.send("r;;" + username + ";" + password)
+            await websocket.send("r;;" + connection_id + ";" + Encryption.encrypt_to_server(username + "@" + password))
             response = await websocket.recv()
             if response == "1":
                 self.controller.raise_login_window()
@@ -263,6 +267,7 @@ class ConnectionThread(threading.Thread):
         self.chat_window = chat_window
 
     def run(self):
+        asyncio.new_event_loop().run_until_complete(Encryption.diffie_hellman_to_server())
         while not username:
             time.sleep(0.1)
         asyncio.new_event_loop().run_until_complete(self.connect())
@@ -364,7 +369,7 @@ class CleanUp:
 
 class Encryption:
 
-    # 2048-bit prime
+    # 2048-bit prime for end-to-end encryption
     p = int("FFFFFFFFFFFFFFFFC90FDAA22168C234C4C6628B80DC1CD1"
             "29024E088A67CC74020BBEA63B139B22514A08798E3404DD"
             "EF9519B3CD3A431B302B0A6DF25F14374FE1356D6D51C245"
@@ -376,7 +381,17 @@ class Encryption:
             "E39E772C180E86039B2783A2EC07A28FB5C55DF06F4C52C9"
             "DE2BCBF6955817183995497CEA956AE515D2261898FA0510"
             "15728E5A8AACAA68FFFFFFFFFFFFFFFF", 16)
-    # base
+
+    # 1536-bit prime for client-to-server encryption
+    p_s = int("FFFFFFFFFFFFFFFFC90FDAA22168C234C4C6628B80DC1CD1"
+              "29024E088A67CC74020BBEA63B139B22514A08798E3404DD"
+              "EF9519B3CD3A431B302B0A6DF25F14374FE1356D6D51C245"
+              "E485B576625E7EC6F44C42E9A637ED6B0BFF5CB6F406B7ED"
+              "EE386BFB5A899FA5AE9F24117C4B1FE649286651ECE45B3D"
+              "C2007CB8A163BF0598DA48361C55D39A69163FA8FD24CF5F"
+              "83655D23DCA3AD961C62F356208552BB9ED529077096966D"
+              "670C354E4ABC9804F1746C08CA237327FFFFFFFFFFFFFFFF", 16)
+
     g = 2
     private_keys = {}
 
@@ -384,18 +399,26 @@ class Encryption:
     async def send_diffie_hellman(cls, friend):
         async with websockets.connect("ws://localhost:8765") as ws:
             if friend not in cls.private_keys:
-                await cls.add_private_key(friend)
+                await cls.add_private_key(friend, 160)
             await ws.send("d;" + friend + ";" + username + ";" + str(pow(cls.g, cls.private_keys[friend], cls.p)))
 
     @classmethod
     async def receive_diffie_hellman(cls, friend, received_key):
         if friend not in cls.private_keys:
-            await cls.add_private_key(friend)
+            await cls.add_private_key(friend, 160)
         keys[friend] = pow(int(received_key), cls.private_keys[friend], cls.p)
 
     @classmethod
-    async def add_private_key(cls, friend):
-        cls.private_keys[friend] = random.getrandbits(160)
+    async def diffie_hellman_to_server(cls):
+        async with websockets.connect("ws://localhost:8765") as ws:
+            await ws.send("s;;" + connection_id + ";" + str(pow(cls.g, connection_secret_key, cls.p_s)))
+            received_key = await ws.recv()
+            global connection_key
+            connection_key = pow(int(received_key), connection_secret_key, cls.p_s)
+
+    @classmethod
+    async def add_private_key(cls, friend, n_bits):
+        cls.private_keys[friend] = int.from_bytes(urandom(n_bits), sys.byteorder)
 
     @staticmethod
     def encrypt(message, friend):
@@ -410,6 +433,13 @@ class Encryption:
         k = base64.urlsafe_b64encode(bytearray(random.getrandbits(8) for _ in range(32)))
         f = Fernet(k)
         return f.decrypt(message.encode("UTF-8")).decode()
+
+    @staticmethod
+    def encrypt_to_server(message):
+        random.seed(connection_key)
+        k = base64.urlsafe_b64encode(bytearray(random.getrandbits(8) for _ in range(32)))
+        f = Fernet(k)
+        return f.encrypt(bytes(message, encoding="UTF-8")).decode("UTF-8")
 
 
 # ------------------ Controller ------------------

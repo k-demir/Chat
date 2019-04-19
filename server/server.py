@@ -1,9 +1,15 @@
 import asyncio
 import websockets
-import ssl
-import pathlib
 import sqlite3
 import pickle
+import random
+import base64
+from cryptography.fernet import Fernet
+from os import urandom
+import sys
+
+
+keys = {}
 
 
 class Connection:
@@ -17,18 +23,25 @@ class Connection:
     async def msg(self, websocket, path):
         try:
             async for received_message in websocket:
+                global keys
                 msg_type, receiver, sender, message = self.parse_message(received_message)
 
                 # Login
                 if msg_type == "l":
-                    if self.db.verify_user(sender, message):
+                    message = Encryption.decrypt(message, sender)
+                    username, password = message.split("@", 1)
+                    if self.db.verify_user(username, password):
+                        keys[username] = keys[sender]
+                        keys.pop(sender)
                         await websocket.send("1")
                     else:
                         await websocket.send("0")
                 # Registration
                 elif msg_type == "r":
-                    if not self.db.find_user(sender):
-                        self.db.add_user(sender, message)
+                    message = Encryption.decrypt(message, sender)
+                    username, password = message.split("@", 1)
+                    if not self.db.find_user(username):
+                        self.db.add_user(username, password)
                         await websocket.send("1")
                     else:
                         await websocket.send("0")
@@ -51,13 +64,19 @@ class Connection:
                         await websocket.send("1")
                     else:
                         await websocket.send("0")
-                # Diffie-Hellman key exchange
+                # Diffie-Hellman key exchange between clients
                 elif msg_type == "d":
                     if receiver in self.connections:
                         await self.connections[receiver].send("d+" + sender + ";" + message)
+                # Diffie-Hellman exchange between server and a client
+                elif msg_type == "s":
+                    await Encryption.receive_diffie_hellman_from_client(sender, message)
+                    await websocket.send(Encryption.get_diffie_hellman_key(sender))
                 # Disconnection request
                 elif msg_type == "g":
-                    self.remove_connection(sender)
+                    self.connections.pop(sender)
+                    keys.pop(sender)
+
         except websockets.ConnectionClosed:
             pass
 
@@ -66,8 +85,6 @@ class Connection:
         split_message = message.split(";", 3)
         return split_message[0], split_message[1], split_message[2], split_message[3]
 
-    def remove_connection(self, user):
-        self.connections.pop(user)
 
 class Database:
     def __init__(self):
@@ -122,6 +139,46 @@ class Database:
         if res:
             friends += [friend[0] for friend in res]
         return friends
+
+
+class Encryption:
+
+    # 1536-bit prime for client-to-server encryption
+    p_s = int("FFFFFFFFFFFFFFFFC90FDAA22168C234C4C6628B80DC1CD1"
+              "29024E088A67CC74020BBEA63B139B22514A08798E3404DD"
+              "EF9519B3CD3A431B302B0A6DF25F14374FE1356D6D51C245"
+              "E485B576625E7EC6F44C42E9A637ED6B0BFF5CB6F406B7ED"
+              "EE386BFB5A899FA5AE9F24117C4B1FE649286651ECE45B3D"
+              "C2007CB8A163BF0598DA48361C55D39A69163FA8FD24CF5F"
+              "83655D23DCA3AD961C62F356208552BB9ED529077096966D"
+              "670C354E4ABC9804F1746C08CA237327FFFFFFFFFFFFFFFF", 16)
+
+    g = 2
+    private_keys = {}
+
+    @classmethod
+    def get_diffie_hellman_key(cls, client):
+        if client not in cls.private_keys:
+            cls.add_private_key(client, 120)
+        return str(pow(cls.g, cls.private_keys[client], cls.p_s))
+
+    @classmethod
+    async def receive_diffie_hellman_from_client(cls, client, received_key):
+        if client not in cls.private_keys:
+            await cls.add_private_key(client, 120)
+        global keys
+        keys[client] = pow(int(received_key), cls.private_keys[client], cls.p_s)
+
+    @classmethod
+    async def add_private_key(cls, friend, n_bits):
+        cls.private_keys[friend] = int.from_bytes(urandom(n_bits), sys.byteorder)
+
+    @staticmethod
+    def decrypt(message, client):
+        random.seed(keys[client])
+        k = base64.urlsafe_b64encode(bytearray(random.getrandbits(8) for _ in range(32)))
+        f = Fernet(k)
+        return f.decrypt(message.encode("UTF-8")).decode()
 
 
 if __name__ == "__main__":
