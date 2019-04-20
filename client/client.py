@@ -183,6 +183,8 @@ class RegisterWindow(Frame):
             response = await websocket.recv()
             if response == "1":
                 self.controller.raise_login_window()
+            elif response == "0":
+                self.print_registration_error("Username taken")
 
     def print_registration_error(self, message):
         label = Label(self.error_frame, text=message, fg="red", anchor=CENTER, justify=CENTER, bg=color_1)
@@ -211,7 +213,7 @@ class ChatWindow(Frame):
 
         # Received messages areas
         self.received_messages = scrolledtext.ScrolledText(chat_frame, bg=color_1, highlightthickness=0)
-        self.received_messages.grid(column=0, row=0, sticky=NSEW, padx=(10, 0))
+        self.received_messages.grid(column=0, row=0, sticky=NSEW, padx=(10, 0), pady=(10, 10))
         self.received_messages.config(state=DISABLED)
 
         # Message entry
@@ -277,7 +279,7 @@ class ChatWindow(Frame):
                 online_friends.append(friend)
             else:
                 offline_friends.append(friend)
-
+                
         for friend in sorted(online_friends):
             if friend == to_user:
                 bg = color_2
@@ -311,7 +313,7 @@ class ChatWindow(Frame):
         self.received_messages.config(state=NORMAL)
 
         self.received_messages.delete(1.0, END)
-        self.received_messages.insert(INSERT, "\n\n".join(chats[to_user][max(0, len(chats[to_user])-100):]))
+        self.received_messages.insert(INSERT, "\n\n".join(chats[to_user][max(0, len(chats[to_user])-500):]))
         self.received_messages.see(END)
         self.received_messages.config(state=DISABLED)
 

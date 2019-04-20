@@ -116,6 +116,7 @@ class Database:
         self.user_db.execute("CREATE TABLE IF NOT EXISTS friends (user1 TEXT, user2 TEXT, PRIMARY KEY (user1, user2))")
 
     def add_user(self, username, password):
+        username = username.lower()
         hashed_password, salt = Encryption.hash_password(password)
 
         c = self.user_db.cursor()
@@ -124,6 +125,7 @@ class Database:
         return self.find_user(username)
 
     def find_user(self, username):
+        username = username.lower()
         c = self.user_db.cursor()
         c.execute("SELECT rowid FROM user_info WHERE username=?", (username,))
         ret = c.fetchone()
@@ -132,6 +134,7 @@ class Database:
         return ret[0]
 
     def verify_user(self, username, password):
+        username = username.lower()
         c = self.user_db.cursor()
         c.execute("SELECT password, salt FROM user_info WHERE username=?", (username,))
         try:
@@ -144,12 +147,14 @@ class Database:
             return False
 
     def add_friends(self, user_1, user_2):
+        user_1, user_2 = user_1.lower(), user_2.lower()
         c = self.user_db.cursor()
         if not self.are_friends(user_1, user_2):
             c.execute("INSERT INTO friends VALUES (?, ?)", (user_1, user_2))
             self.user_db.commit()
 
     def are_friends(self, user_1, user_2):
+        user_1, user_2 = user_1.lower(), user_2.lower()
         c = self.user_db.cursor()
         c.execute("SELECT rowid FROM friends WHERE (user1=? AND user2=?) OR (user1=? AND user2=?)",
                   (user_1, user_2, user_2, user_1))
@@ -158,6 +163,7 @@ class Database:
         return False
 
     def find_friends(self, user):
+        user = user.lower()
         friends = []
         c = self.user_db.cursor()
         c.execute("SELECT user1 FROM friends WHERE user2=?", (user,))
