@@ -25,6 +25,7 @@ connection_key = None
 
 color_1 = "#F3F4EF"
 color_2 = "#BDC696"
+color_3 = "#D1D3C4"
 
 
 # ------------------ Login Window ------------------
@@ -284,7 +285,7 @@ class ChatWindow(Frame):
             if friend == to_user:
                 bg = color_2
             else:
-                bg = "#D1D3C4"
+                bg = color_3
             b = Label(self.friends_frame, text=friend, bg=bg)
             b.bind("<Button-1>", lambda _, f=friend: self.change_chat_partner(f))
             friend_btns.append(b)
