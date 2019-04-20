@@ -51,12 +51,16 @@ class Connection:
                 elif msg_type == "c":
                     if sender not in self.connections:
                         self.connections[sender] = websocket
-                    await websocket.send(pickle.dumps(self.db.find_friends(sender)))
+                    online_friends = self.find_online_friends(sender)
+                    await websocket.send(pickle.dumps(online_friends))
+                    for friend, online in online_friends.items():
+                        if online:
+                            await self.connections[friend].send("c+" + sender + ";1")
                 # Receive a message
                 elif msg_type == "m":
                     if receiver in self.connections and receiver != sender:
-                        await self.connections[sender].send(sender + ";" + message)
-                        await self.connections[receiver].send(sender + ";" + message)
+                        await self.connections[sender].send(sender + ">" + receiver + ";" + message)
+                        await self.connections[receiver].send(sender + ">" + sender + ";" + message)
                 # Add friend
                 elif msg_type == "a":
                     if self.db.find_user(receiver) and not self.db.are_friends(sender, receiver):
@@ -76,11 +80,28 @@ class Connection:
                     await websocket.send(Encryption.get_diffie_hellman_key(sender))
                 # Disconnection request
                 elif msg_type == "g":
-                    self.connections.pop(sender)
-                    keys.pop(sender)
+                    try:
+                        self.connections.pop(sender)
+                        online_friends = self.find_online_friends(sender)
+                        for friend, online in online_friends.items():
+                            if online:
+                                await self.connections[friend].send("c+" + sender + ";0")
+                        keys.pop(sender)
+                    except KeyError:
+                        continue
 
         except websockets.ConnectionClosed:
             pass
+
+    def find_online_friends(self, user):
+        ret = {}
+        friends = self.db.find_friends(user)
+        for friend in friends:
+            if friend in self.connections:
+                ret[friend] = 1
+            else:
+                ret[friend] = 0
+        return ret
 
     @staticmethod
     def parse_message(message):
