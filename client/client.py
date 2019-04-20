@@ -12,7 +12,6 @@ import atexit
 from os import urandom
 import sys
 
-
 username = ""
 friends = {}
 to_user = ""
@@ -41,11 +40,11 @@ class LoginWindow(Frame):
         self.rowconfigure(0, weight=1)
         self.grid_propagate(False)
 
-        login_container = Frame(self, width=wd/3, height=ht/2, bg=color_1)
+        login_container = Frame(self, width=wd / 3, height=ht / 2, bg=color_1)
         login_container.grid(column=0, row=0)
         login_container.rowconfigure(0, weight=0)
 
-        self.error_frame = Frame(login_container, width=wd/3, height=ht/2, bg=color_1)
+        self.error_frame = Frame(login_container, width=wd / 3, height=ht / 2, bg=color_1)
         self.error_frame.grid(column=0, row=0, sticky=EW)
         self.error_frame.columnconfigure(0, weight=1)
         self.print_login_error("")
@@ -62,7 +61,7 @@ class LoginWindow(Frame):
         password_label.grid(column=0, row=3, sticky=EW)
 
         self.password_entry = Entry(login_container, width=30, highlightthickness=1, borderwidth=0,
-                                       relief=SOLID, highlightbackground=color_1, highlightcolor=color_2, show="*")
+                                    relief=SOLID, highlightbackground=color_1, highlightcolor=color_2, show="*")
         self.password_entry.grid(column=0, row=4, sticky=EW)
         self.password_entry.bind("<Return>", lambda _: self.try_login())
 
@@ -113,11 +112,11 @@ class RegisterWindow(Frame):
         Frame.__init__(self, parent, width=wd, height=ht, bg=color_1)
         self.controller = controller
 
-        register_container = Frame(self, width=wd/3, height=ht/2, bg=color_1)
+        register_container = Frame(self, width=wd / 3, height=ht / 2, bg=color_1)
         register_container.grid(column=0, row=0)
         register_container.rowconfigure(0, weight=0)
 
-        self.error_frame = Frame(register_container, width=wd/3, height=ht/2, bg=color_1)
+        self.error_frame = Frame(register_container, width=wd / 3, height=ht / 2, bg=color_1)
         self.error_frame.grid(column=0, row=0, sticky=EW)
         self.error_frame.columnconfigure(0, weight=1)
         self.print_registration_error("")
@@ -191,6 +190,7 @@ class RegisterWindow(Frame):
         label = Label(self.error_frame, text=message, fg="red", anchor=CENTER, justify=CENTER, bg=color_1)
         label.grid(column=0, row=0, sticky=EW)
 
+
 # ------------------ Chat Window ------------------
 
 
@@ -200,14 +200,14 @@ class ChatWindow(Frame):
         Frame.__init__(self, parent, width=wd, height=ht, bg=color_1)
 
         # Chat frame
-        chat_frame = Frame(self, width=4*wd/5, height=ht-50, bg=color_1)
+        chat_frame = Frame(self, width=4 * wd / 5, height=ht - 50, bg=color_1)
         chat_frame.grid(column=1, row=0)
         chat_frame.columnconfigure(0, weight=1)
         chat_frame.rowconfigure(0, weight=1)
         chat_frame.grid_propagate(False)
 
         # Message frame
-        message_frame = Frame(self, width=4*wd/5, height=50, bg=color_1)
+        message_frame = Frame(self, width=4 * wd / 5, height=50, bg=color_1)
         message_frame.grid(column=1, row=1, sticky=NSEW)
         message_frame.columnconfigure(0, weight=1)
         message_frame.grid_propagate(False)
@@ -232,7 +232,7 @@ class ChatWindow(Frame):
         send_button.grid(column=0, row=0, sticky=NSEW, padx=(1, 1), pady=(1, 1))
 
         # Sidebar frame
-        sidebar = Frame(self, width=wd/5, height=ht)
+        sidebar = Frame(self, width=wd / 5, height=ht)
         sidebar.grid(column=0, row=0, rowspan=2)
         sidebar.columnconfigure(0, weight=1)
         sidebar.rowconfigure(0, weight=1)
@@ -240,7 +240,7 @@ class ChatWindow(Frame):
 
         # Sidebar friends area
         self.friends_frame = Frame(sidebar, height=200)
-        self.friends_frame.grid(column=0, row=0, sticky=N+EW)
+        self.friends_frame.grid(column=0, row=0, sticky=N + EW)
         self.friends_frame.columnconfigure(0, weight=1)
         self.friends_frame.rowconfigure(0, weight=0)
         self.friends_frame.grid_propagate(True)
@@ -280,7 +280,7 @@ class ChatWindow(Frame):
                 online_friends.append(friend)
             else:
                 offline_friends.append(friend)
-                
+
         for friend in sorted(online_friends):
             if friend == to_user:
                 bg = color_2
@@ -314,7 +314,7 @@ class ChatWindow(Frame):
         self.received_messages.config(state=NORMAL)
 
         self.received_messages.delete(1.0, END)
-        self.received_messages.insert(INSERT, "\n\n".join(chats[to_user][max(0, len(chats[to_user])-500):]))
+        self.received_messages.insert(INSERT, "\n\n".join(chats[to_user][max(0, len(chats[to_user]) - 500):]))
         self.received_messages.see(END)
         self.received_messages.config(state=DISABLED)
 
@@ -459,7 +459,6 @@ class CleanUp:
 
 
 class Encryption:
-
     # 2048-bit prime for end-to-end encryption
     p = int("FFFFFFFFFFFFFFFFC90FDAA22168C234C4C6628B80DC1CD1"
             "29024E088A67CC74020BBEA63B139B22514A08798E3404DD"

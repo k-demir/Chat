@@ -1,3 +1,3 @@
-./client/*.pickle
-./server/*.db
+*.pickle
+*.db
 .idea
