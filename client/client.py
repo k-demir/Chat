@@ -1,3 +1,7 @@
+"""
+Contains client functionality.
+"""
+
 import atexit
 
 from tools import *
@@ -8,12 +12,19 @@ from gui_elements import *
 
 
 class ConnectionThread(threading.Thread):
-    def __init__(self, chat_window, controller):
+    """Handles the incoming messages."""
+
+    def __init__(self, controller):
+        """Constructor.
+
+        Args:
+            controller: An instance of the Controller class.
+        """
         threading.Thread.__init__(self)
         self.controller = controller
-        self.chat_window = chat_window
 
     def run(self):
+        """Exchanges the Diffie-Hellman key with the server and forms the connection after login."""
         self.controller.connection_key = asyncio.new_event_loop().run_until_complete(
             Encryption.diffie_hellman_to_server(
                 self.controller.connection_id, self.controller.connection_secret_key, self.controller.ws_uri))
@@ -22,16 +33,18 @@ class ConnectionThread(threading.Thread):
         asyncio.new_event_loop().run_until_complete(self.connect())
 
     async def connect(self):
+        """Forms the connection to the server after login and handles incoming messages."""
         async with websockets.connect(self.controller.ws_uri) as websocket:
             await websocket.send("c;;" + self.controller.username + ";")
             res = await websocket.recv()
 
             self.controller.friends = pickle.loads(res)
-            self.chat_window.add_sidebar_buttons()
+            self.controller.chat_window.add_sidebar_buttons()
 
             self.controller.file_manager.load()
-
-            AutoSaver(self.controller.file_manager).start()
+            a = AutoSaver(1800, self.controller.file_manager)
+            a.daemon = True
+            a.start()
 
             while True:
                 message = await websocket.recv()
@@ -39,29 +52,35 @@ class ConnectionThread(threading.Thread):
 
                 if sender[:2] == "c+":
                     self.controller.friends[sender[2:]] = int(parsed_message)
-                    self.chat_window.add_sidebar_buttons()
+                    self.controller.chat_window.add_sidebar_buttons()
                 elif sender[:2] == "a+":
                     await Encryption.send_diffie_hellman(sender[2:], self.controller.username, self.controller.ws_uri)
                 elif sender[:2] == "d+":
                     self.controller.keys[sender[2:]] = Encryption.receive_diffie_hellman(sender[2:], parsed_message)
                     self.controller.friends[sender[2:]] = 1
                     self.controller.chats[sender[2:]] = []
-                    self.chat_window.add_sidebar_buttons()
+                    self.controller.chat_window.add_sidebar_buttons()
                     self.controller.to_user = sender[2:]
                 else:
                     from_user, to_cht = sender.split(">", 1)
                     self.controller.chats[to_cht].append(
                         from_user + ": " + Encryption.decrypt(parsed_message, self.controller.keys[to_cht]))
                     if self.controller.to_user:
-                        self.chat_window.update_chat()
+                        self.controller.chat_window.update_chat()
 
 
 # ------------------ Controller ------------------
 
 
 class Controller:
+    """Creates the UI and starts the application."""
 
     def __init__(self, ws_uri="ws://localhost:8765"):
+        """Constructor.
+
+        Args:
+            ws_uri: The location of the server.
+        """
         self.ws_uri = ws_uri
 
         width = 800
@@ -97,7 +116,9 @@ class Controller:
         atexit.register(self.file_manager.save)
         atexit.register(CleanUp(self).disconnect)
 
-        ConnectionThread(self.chat_window, self).start()
+        ct = ConnectionThread(self)
+        ct.daemon = True
+        ct.start()
         app.mainloop()
 
     def raise_register_window(self):

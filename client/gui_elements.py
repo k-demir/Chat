@@ -1,3 +1,7 @@
+"""
+Contains elements for the graphical user interface.
+"""
+
 import websockets
 import asyncio
 from tkinter import *
@@ -10,8 +14,17 @@ from tools import Encryption
 
 
 class LoginWindow(Frame):
+    """Creates and adds logic to the login frame."""
 
     def __init__(self, parent, wd, ht, controller):
+        """Constructor
+
+        Args:
+            parent: The parent element.
+            wd: The width of the frame.
+            ht: The height of the frame.
+            controller: An instance of the Controller class.
+        """
         Frame.__init__(self, parent, width=wd, height=ht, bg=controller.color_1)
         self.controller = controller
 
@@ -19,39 +32,47 @@ class LoginWindow(Frame):
         self.rowconfigure(0, weight=1)
         self.grid_propagate(False)
 
-        login_container = Frame(self, width=wd / 3, height=ht / 2, bg=controller.color_1)
+        # A container for the other elements
+        login_container = Frame(self, width=wd/3, height=ht/2, bg=controller.color_1)
         login_container.grid(column=0, row=0)
         login_container.rowconfigure(0, weight=0)
 
-        self.error_frame = Frame(login_container, width=wd / 3, height=ht / 2, bg=controller.color_1)
+        # An area for error messages
+        self.error_frame = Frame(login_container, width=wd/3, height=ht/2, bg=controller.color_1)
         self.error_frame.grid(column=0, row=0, sticky=EW)
         self.error_frame.columnconfigure(0, weight=1)
         self.print_login_error("")
 
+        # A text field for "Username"
         username_label = Label(login_container, text="Username", justify=LEFT, bg=controller.color_1)
         username_label.grid(column=0, row=1, sticky=EW)
 
+        # Username entry field
         self.username_entry = Entry(login_container, width=30, highlightthickness=1, borderwidth=0,
                                     relief=SOLID, highlightbackground=controller.color_1,
                                     highlightcolor=controller.color_2)
         self.username_entry.grid(column=0, row=2, sticky=EW)
         self.username_entry.bind("<Return>", lambda _: self.try_login())
 
+        # A text field for "Password"
         password_label = Label(login_container, text="Password", justify=LEFT, bg=controller.color_1)
         password_label.grid(column=0, row=3, sticky=EW)
 
+        # Password entry field
         self.password_entry = Entry(login_container, width=30, highlightthickness=1, borderwidth=0, relief=SOLID,
                                     highlightbackground=controller.color_1, highlightcolor=controller.color_2, show="*")
         self.password_entry.grid(column=0, row=4, sticky=EW)
         self.password_entry.bind("<Return>", lambda _: self.try_login())
 
+        # Login button
         login_btn_frame = Frame(login_container, bg=controller.color_2)
         login_btn_frame.grid(column=0, row=5, sticky=EW, pady=(20, 0))
         login_btn_frame.columnconfigure(0, weight=1)
-        self.login_button = Label(login_btn_frame, text="Login", bg="white")
+        self.login_button = Label(login_btn_frame, text="Log in", bg="white")
         self.login_button.bind("<Button-1>", lambda _: self.try_login())
         self.login_button.grid(column=0, row=0, sticky=EW, padx=(1, 1), pady=(1, 1))
 
+        # Registration button
         reg_btn_frame = Frame(login_container, bg=controller.color_2)
         reg_btn_frame.grid(column=0, row=6, sticky=EW, pady=(20, 0))
         reg_btn_frame.columnconfigure(0, weight=1)
@@ -62,24 +83,33 @@ class LoginWindow(Frame):
         self.grid(row=0, column=0)
 
     def try_login(self):
+        """Initiates the login process."""
         asyncio.get_event_loop().run_until_complete(self.verify_login(self.username_entry.get(),
                                                                       self.password_entry.get()))
 
     async def verify_login(self, name, password):
+        """Sends the username and password to the server and handles the response.
+
+        Args:
+            name: The username.
+            password: The password.
+        """
         async with websockets.connect(self.controller.ws_uri) as websocket:
-            await websocket.send("l;;" + self.controller.connection_id + ";" + Encryption.encrypt_to_server(
+            await websocket.send("l;;" + self.controller.connection_id + ";" + Encryption.encrypt(
                 name + "@" + password, self.controller.connection_key))
             response = await websocket.recv()
             if response == "1":
-                self.complete_login(name)
+                self.controller.username = name
+                self.controller.raise_chat_window()
             else:
                 self.print_login_error("Incorrect username or password")
 
-    def complete_login(self, name):
-        self.controller.username = name
-        self.controller.raise_chat_window()
-
     def print_login_error(self, message):
+        """Prints the given message to the login error text area.
+
+        Args:
+            message: The error message that is printed.
+        """
         label = Label(self.error_frame, text=message, fg="red", anchor=CENTER, justify=CENTER,
                       bg=self.controller.color_1)
         label.grid(column=0, row=0, sticky=EW)
@@ -89,45 +119,64 @@ class LoginWindow(Frame):
 
 
 class RegisterWindow(Frame):
+    """Creates and adds logic to the registration frame."""
+
     def __init__(self, parent, wd, ht, controller):
+        """Contructor.
+
+        Args:
+            parent: The parent element.
+            wd: The width of the frame.
+            ht: The height of the frame.
+            controller: An instance of the Controller class.
+        """
         Frame.__init__(self, parent, width=wd, height=ht, bg=controller.color_1)
         self.controller = controller
 
-        register_container = Frame(self, width=wd / 3, height=ht / 2, bg=controller.color_1)
+        # A container for the other elements
+        register_container = Frame(self, width=wd/3, height=ht/2, bg=controller.color_1)
         register_container.grid(column=0, row=0)
         register_container.rowconfigure(0, weight=0)
 
-        self.error_frame = Frame(register_container, width=wd / 3, height=ht / 2, bg=controller.color_1)
+        # A text area for error messages
+        self.error_frame = Frame(register_container, width=wd/3, height=ht/2, bg=controller.color_1)
         self.error_frame.grid(column=0, row=0, sticky=EW)
         self.error_frame.columnconfigure(0, weight=1)
         self.print_registration_error("")
 
+        # A text field for "Select username"
         username_label = Label(register_container, text="Select username", bg=controller.color_1)
         username_label.grid(column=0, row=1, sticky=EW)
 
+        # Username entry field
         self.username_entry = Entry(register_container, width=30, highlightthickness=1, borderwidth=0, relief=SOLID,
                                     highlightbackground=controller.color_1, highlightcolor=controller.color_2)
         self.username_entry.grid(column=0, row=2, sticky=EW)
         self.username_entry.bind("<Return>", lambda _: self.try_registration())
 
+        # A text field for "Select password"
         password_label_1 = Label(register_container, text="Select password", bg=controller.color_1)
         password_label_1.grid(column=0, row=3, sticky=EW)
 
+        # Password entry field 1
         self.password_entry_1 = Entry(register_container, width=30, highlightthickness=1, borderwidth=0, relief=SOLID,
                                       highlightbackground=controller.color_1, highlightcolor=controller.color_2,
                                       show="*")
         self.password_entry_1.grid(column=0, row=4, sticky=EW)
         self.password_entry_1.bind("<Return>", lambda _: self.try_registration())
 
+        # A text field for "Confirm password"
         password_label_2 = Label(register_container, text="Confirm password", bg=controller.color_1)
         password_label_2.grid(column=0, row=5, sticky=EW)
 
+        # Password entry field 2
         self.password_entry_2 = Entry(register_container, width=30, highlightthickness=1, borderwidth=0,
                                       relief=SOLID, highlightbackground=controller.color_1,
                                       highlightcolor=controller.color_2, show="*")
         self.password_entry_2.grid(column=0, row=6, sticky=EW)
         self.password_entry_2.bind("<Return>", lambda _: self.try_registration())
 
+        # Registration button
         reg_btn_frame = Frame(register_container, bg=controller.color_2)
         reg_btn_frame.grid(column=0, row=7, sticky=EW, pady=(20, 0))
         reg_btn_frame.columnconfigure(0, weight=1)
@@ -135,6 +184,7 @@ class RegisterWindow(Frame):
         self.register_button.bind("<Button-1>", lambda _: self.try_registration())
         self.register_button.grid(column=0, row=0, sticky=EW, padx=(1, 1), pady=(1, 1))
 
+        # Return button
         ret_btn_frame = Frame(register_container, bg=controller.color_2)
         ret_btn_frame.grid(column=0, row=8, sticky=EW, pady=(20, 0))
         ret_btn_frame.columnconfigure(0, weight=1)
@@ -145,6 +195,8 @@ class RegisterWindow(Frame):
         self.grid(row=0, column=0)
 
     def try_registration(self):
+        """Initiates the registration process after checking that the username and passwords are valid."""
+
         if len(self.username_entry.get()) < 4 or len(self.username_entry.get()) > 15:
             self.print_registration_error("Username must be between 4 and 15 characters")
             return
@@ -161,8 +213,14 @@ class RegisterWindow(Frame):
                                                                            self.password_entry_1.get()))
 
     async def send_registration(self, name, password):
+        """Sends the registration request to the server.
+
+        Args:
+            name: The username.
+            password: The password.
+        """
         async with websockets.connect(self.controller.ws_uri) as websocket:
-            await websocket.send("r;;" + self.controller.connection_id + ";" + Encryption.encrypt_to_server(
+            await websocket.send("r;;" + self.controller.connection_id + ";" + Encryption.encrypt(
                 name + "@" + password, self.controller.connection_key))
             response = await websocket.recv()
             if response == "1":
@@ -171,6 +229,11 @@ class RegisterWindow(Frame):
                 self.print_registration_error("Username taken")
 
     def print_registration_error(self, message):
+        """Prints the given message to the error message area.
+
+        Args:
+            message: The message that is printed.
+        """
         label = Label(self.error_frame, text=message, fg="red", anchor=CENTER, justify=CENTER,
                       bg=self.controller.color_1)
         label.grid(column=0, row=0, sticky=EW)
@@ -180,8 +243,17 @@ class RegisterWindow(Frame):
 
 
 class ChatWindow(Frame):
+    """Creates and adds logic to the chat frame."""
 
     def __init__(self, parent, wd, ht, controller):
+        """Constructor.
+
+        Args:
+            parent: The parent element.
+            wd: The width of the frame.
+            ht: The height of the frame.
+            controller: An instance of the Controller class.
+        """
         Frame.__init__(self, parent, width=wd, height=ht, bg=controller.color_1)
         self.controller = controller
 
@@ -260,6 +332,8 @@ class ChatWindow(Frame):
         self.grid(row=0, column=0, sticky=NSEW)
 
     def add_sidebar_buttons(self):
+        """Adds new friend buttons to the sidebar."""
+
         friend_btns = []
         online_friends = []
         offline_friends = []
@@ -291,14 +365,17 @@ class ChatWindow(Frame):
             btn.grid(column=0, row=idx, sticky=EW, pady=(0, 1))
 
     def send_message(self):
+        """Sends a message to the current chat partner and erases the message entry field."""
+
         message = self.message_entry.get()
         if not message:
             return
-
         self.message_entry.delete(0, "end")
         asyncio.get_event_loop().run_until_complete(self.msg(message))
 
     def update_chat(self):
+        """Updates the received messages area."""
+
         self.received_messages.config(state=NORMAL)
 
         self.received_messages.delete(1.0, END)
@@ -309,20 +386,36 @@ class ChatWindow(Frame):
         self.received_messages.config(state=DISABLED)
 
     async def msg(self, message):
+        """Sends the given message to the current chat partner.
+
+        Args:
+            message: The message that is sent.
+        """
         async with websockets.connect(self.controller.ws_uri) as websocket:
             await websocket.send("m;" + self.controller.to_user + ";" + self.controller.username + ";"
                                  + Encryption.encrypt(message, self.controller.keys[self.controller.to_user]))
 
     def change_chat_partner(self, friend):
+        """Changes the current chat partner.
+
+        Args:
+            friend: The new chat partner.
+        """
         self.controller.to_user = friend
         self.add_sidebar_buttons()
         self.message_entry.config(state=NORMAL)
         self.update_chat()
 
     def try_add_friend(self):
+        """Initiates the process to add a new friend."""
         asyncio.get_event_loop().run_until_complete(self.add_friend(self.add_friends_entry.get()))
 
     async def add_friend(self, user):
+        """Sends a request to the server to add a new friend and sends the Diffie-Hellman key if the request succeeds.
+
+        Args:
+            user: The added friend.
+        """
         async with websockets.connect(self.controller.ws_uri) as websocket:
             if user == self.controller.username:
                 return
