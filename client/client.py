@@ -54,7 +54,8 @@ class ConnectionThread(threading.Thread):
                     self.controller.friends[sender[2:]] = int(parsed_message)
                     self.controller.chat_window.add_sidebar_buttons()
                 elif sender[:2] == "a+":
-                    await Encryption.send_diffie_hellman(sender[2:], self.controller.username, self.controller.ws_uri)
+                    await websocket.send("d;" + sender[2:] + ";" + self.controller.username + ";"
+                                         + Encryption.get_diffie_hellman(sender[2:]))
                 elif sender[:2] == "d+":
                     self.controller.keys[sender[2:]] = Encryption.receive_diffie_hellman(sender[2:], parsed_message)
                     self.controller.friends[sender[2:]] = 1

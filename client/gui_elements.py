@@ -422,5 +422,6 @@ class ChatWindow(Frame):
             await websocket.send("a;" + user + ";" + self.controller.username + ";")
             response = await websocket.recv()
             if response == "1":
-                await Encryption.send_diffie_hellman(user, self.controller.username, self.controller.ws_uri)
+                await websocket.send(
+                    "d;" + user + ";" + self.controller.username + ";" + Encryption.get_diffie_hellman(user))
             self.add_friends_entry.delete(0, END)

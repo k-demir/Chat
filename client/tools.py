@@ -132,18 +132,17 @@ class Encryption:
     private_keys = {}
 
     @classmethod
-    async def send_diffie_hellman(cls, friend, username, ws_uri):
-        """Sends the Diffie-Hellman public key to the other user through the server.
+    def get_diffie_hellman(cls, friend):
+        """Returns the Diffie-Hellman public key that is sent to the other user through the server.
 
         Args:
             friend: The username of the other user.
             username: The username of the current user.
             ws_uri: The location of the server
         """
-        async with websockets.connect(ws_uri) as ws:
-            if friend not in cls.private_keys:
-                await cls.add_private_key(friend, 160)
-            await ws.send("d;" + friend + ";" + username + ";" + str(pow(cls.g, cls.private_keys[friend], cls.p)))
+        if friend not in cls.private_keys:
+            cls.add_private_key(friend, 160)
+        return str(pow(cls.g, cls.private_keys[friend], cls.p))
 
     @classmethod
     def receive_diffie_hellman(cls, friend, received_key):
@@ -178,7 +177,7 @@ class Encryption:
             return pow(int(received_key), connection_secret_key, cls.p_s)
 
     @classmethod
-    async def add_private_key(cls, friend, n_bits):
+    def add_private_key(cls, friend, n_bits):
         """Creates and adds a private key to the static private_keys variable.
 
         Args:
