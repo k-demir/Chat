@@ -8,9 +8,6 @@ from tools import *
 from gui_elements import *
 
 
-# ------------------ Connection Thread ------------------
-
-
 class ConnectionThread(threading.Thread):
     """Handles the incoming messages."""
 
@@ -68,9 +65,6 @@ class ConnectionThread(threading.Thread):
                         from_user + ": " + Encryption.decrypt(parsed_message, self.controller.keys[to_cht]))
                     if self.controller.to_user:
                         self.controller.chat_window.update_chat()
-
-
-# ------------------ Controller ------------------
 
 
 class Controller:

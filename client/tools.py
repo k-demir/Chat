@@ -14,9 +14,6 @@ from os import urandom
 from cryptography.fernet import Fernet
 
 
-# ------------------ File manager ------------------
-
-
 class FileManager:
     """Manages saving and loading the chats and the Diffie-Hellman keys."""
 
@@ -52,8 +49,6 @@ class FileManager:
                 pickle.dump((self.controller.keys, self.controller.chats), file)
 
 
-# ------------------ Saver thread ------------------
-
 class AutoSaver(threading.Thread):
     """A thread that saves the keys and chats periodically."""
 
@@ -73,8 +68,6 @@ class AutoSaver(threading.Thread):
         time.sleep(self.freq)
         self.file_manager.save()
 
-
-# ------------------ Clean up ------------------
 
 class CleanUp:
     """Handles clean up when disconnecting."""
@@ -98,9 +91,6 @@ class CleanUp:
                 await websocket.send("g;;" + self.controller.username + ";")
             else:
                 await websocket.send("g;;" + self.controller.connection_id + ";")
-
-
-# ------------------ Encryption ------------------
 
 
 class Encryption:
@@ -137,8 +127,6 @@ class Encryption:
 
         Args:
             friend: The username of the other user.
-            username: The username of the current user.
-            ws_uri: The location of the server
         """
         if friend not in cls.private_keys:
             cls.add_private_key(friend, 160)

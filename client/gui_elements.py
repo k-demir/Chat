@@ -10,9 +10,6 @@ from tkinter import scrolledtext
 from tools import Encryption
 
 
-# ------------------ Login Window ------------------
-
-
 class LoginWindow(Frame):
     """Creates and adds logic to the login frame."""
 
@@ -113,9 +110,6 @@ class LoginWindow(Frame):
         label = Label(self.error_frame, text=message, fg="red", anchor=CENTER, justify=CENTER,
                       bg=self.controller.color_1)
         label.grid(column=0, row=0, sticky=EW)
-
-
-# ------------------ Registration Window ------------------
 
 
 class RegisterWindow(Frame):
@@ -237,9 +231,6 @@ class RegisterWindow(Frame):
         label = Label(self.error_frame, text=message, fg="red", anchor=CENTER, justify=CENTER,
                       bg=self.controller.color_1)
         label.grid(column=0, row=0, sticky=EW)
-
-
-# ------------------ Chat Window ------------------
 
 
 class ChatWindow(Frame):
