@@ -1,6 +1,5 @@
 test:
   script:
-    - apk update -qy
-    - apk install -y python-dev python-pip
+    - apk add --update python-dev python-pip
     - pip install -r requirements.txt
     - python -m unittest tests/encryption_test.py
