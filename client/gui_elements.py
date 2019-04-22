@@ -335,7 +335,7 @@ class ChatWindow(Frame):
                 offline_friends.append(friend)
 
         for friend in sorted(online_friends):
-            if friend == self.controller.to_user:
+            if friend.lower() == self.controller.to_user.lower():
                 bg = self.controller.color_2
             else:
                 bg = self.controller.color_3
@@ -344,7 +344,7 @@ class ChatWindow(Frame):
             friend_btns.append(b)
 
         for friend in sorted(offline_friends):
-            if friend == self.controller.to_user:
+            if friend.lower() == self.controller.to_user.lower():
                 bg = self.controller.color_2
             else:
                 bg = self.controller.color_1

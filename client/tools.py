@@ -27,13 +27,14 @@ class FileManager:
 
     def load(self):
         """Loads the chats and Diffie-Hellman keys from a pickle file."""
+        name = self.controller.username.lower()
         try:
-            f = open(self.controller.username + ".pickle", "rb")
+            f = open(name + ".pickle", "rb")
             f.close()
         except IOError:
-            f = open(self.controller.username + ".pickle", "wb+")
+            f = open(name + ".pickle", "wb+")
             f.close()
-        with open(self.controller.username + ".pickle", "rb") as file:
+        with open(name + ".pickle", "rb") as file:
             try:
                 loaded_keys, loaded_chats = pickle.load(file)
                 self.controller.keys = loaded_keys
@@ -45,7 +46,7 @@ class FileManager:
     def save(self):
         """Saves the chats and Diffie-Hellman keys to a pickle file."""
         if self.controller.username:
-            with open(self.controller.username + ".pickle", "wb+") as file:
+            with open(self.controller.username.lower() + ".pickle", "wb+") as file:
                 pickle.dump((self.controller.keys, self.controller.chats), file)
 
 
@@ -128,9 +129,9 @@ class Encryption:
         Args:
             friend: The username of the other user.
         """
-        if friend not in cls.private_keys:
-            cls.add_private_key(friend, 160)
-        return str(pow(cls.g, cls.private_keys[friend], cls.p))
+        if friend.lower() not in cls.private_keys:
+            cls.add_private_key(friend.lower(), 160)
+        return str(pow(cls.g, cls.private_keys[friend.lower()], cls.p))
 
     @classmethod
     def receive_diffie_hellman(cls, friend, received_key):
@@ -143,9 +144,9 @@ class Encryption:
         Returns:
             The computed shared key.
         """
-        if friend not in cls.private_keys:
-            cls.add_private_key(friend, 160)
-        return pow(int(received_key), cls.private_keys[friend], cls.p)
+        if friend.lower() not in cls.private_keys:
+            cls.add_private_key(friend.lower(), 160)
+        return pow(int(received_key), cls.private_keys[friend.lower()], cls.p)
 
     @classmethod
     async def diffie_hellman_to_server(cls, connection_id, connection_secret_key, ws_uri):

@@ -54,8 +54,8 @@ class Server:
                         await websocket.send("0")
                 # Connection
                 elif msg_type == "c":
-                    if sender not in self.connections:
-                        self.connections[sender] = websocket
+                    if sender.lower() not in self.connections:
+                        self.connections[sender.lower()] = websocket
                     online_friends = self.find_online_friends(sender)
                     await websocket.send(pickle.dumps(online_friends))
                     for friend, online in online_friends.items():
@@ -68,17 +68,18 @@ class Server:
                         await self.connections[receiver].send(sender + ">" + sender + ";" + message)
                 # Add friend
                 elif msg_type == "a":
-                    if self.db.find_user(receiver) and not self.db.are_friends(sender, receiver):
+                    if self.db.find_user(receiver) and receiver.lower() in self.connections\
+                            and not self.db.are_friends(sender, receiver):
                         self.db.add_friends(sender, receiver)
-                        if receiver in self.connections:
-                            await self.connections[receiver].send("a+" + sender + ";")
+                        if receiver.lower() in self.connections:
+                            await self.connections[receiver.lower()].send("a+" + sender + ";")
                         await websocket.send("1")
                     else:
                         await websocket.send("0")
                 # Diffie-Hellman key exchange between clients
                 elif msg_type == "d":
-                    if receiver in self.connections:
-                        await self.connections[receiver].send("d+" + sender + ";" + message)
+                    if receiver.lower() in self.connections:
+                        await self.connections[receiver.lower()].send("d+" + sender + ";" + message)
                 # Diffie-Hellman exchange between server and a client
                 elif msg_type == "s":
                     self.keys[sender] = await Encryption.receive_diffie_hellman_from_client(sender, message)
@@ -86,7 +87,7 @@ class Server:
                 # Disconnection request
                 elif msg_type == "g":
                     try:
-                        self.connections.pop(sender)
+                        self.connections.pop(sender.lower())
                         online_friends = self.find_online_friends(sender)
                         for friend, online in online_friends.items():
                             if online:
